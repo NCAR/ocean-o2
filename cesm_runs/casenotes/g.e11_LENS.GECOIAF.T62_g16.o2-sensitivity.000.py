@@ -11,6 +11,8 @@ from cesm_case_tools import defcase,xmlchange,user_nl_append
 
 project_name = 'g3-oxygen'
 account = 'UGIT0016'
+walltime = '12:00:00'
+queue = 'regular'
 
 tag = 'cesm1_1_2_LENS_n19'
 coderoot = os.path.join('/glade/p/cgd/oce/people/mclong/cesm',tag)
@@ -27,7 +29,7 @@ if not os.path.exists(caserootroot):
     call(['mkdir','-p',caserootroot])
 
 os.environ['PROJECT'] = account
-os.environ['WALLTIME'] = '12:00:00'
+os.environ['WALLTIME'] = walltime
 
 #----------------------------------------------------------------------
 #---- source
@@ -213,9 +215,6 @@ for comp in ['datm','pop2','cice','share','drv']:
 
 stat = call(['./preview_namelists'])
 if stat != 0: exit(1)
-
-walltime = '12:00'
-queue = 'regular'
 
 for rep in ['s/PBS -l walltime.*/PBS -l walltime='+walltime+'/',
             's/PBS -q.*/PBS -q '+queue+'/']:
