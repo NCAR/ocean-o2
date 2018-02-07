@@ -13,7 +13,7 @@ project_name = 'g3-oxygen'
 account = 'UGIT0016'
 
 tag = 'cesm1_1_2_LENS_n19'
-coderoot = os.path.join('/glade/p/cgd/oce/people/mclong/cesm/svn_co',tag)
+coderoot = os.path.join('/glade/p/cgd/oce/people/mclong/cesm',tag)
 
 scriptroot = os.getcwd()
 inputdata='/glade/p/cesmdata/cseg/inputdata'
@@ -26,8 +26,8 @@ caserootroot = os.path.join('/glade/p/work',
 if not os.path.exists(caserootroot):
     call(['mkdir','-p',caserootroot])
 
-os.environ["PROJECT"] = account
-os.environ["WALLTIME"] = '12:00'
+os.environ['PROJECT'] = account
+os.environ['WALLTIME'] = '12:00:00'
 
 #----------------------------------------------------------------------
 #---- source
@@ -37,7 +37,7 @@ mach = 'cheyenne'
 compref = 'g.e11_LENS'
 compset = 'GECOIAF'
 res = 'T62_g16'
-note = 'nopnetcdf'
+note = 'o2-sensitivity'
 ens = 0
 
 run_refdate = '0281-01-01'
@@ -97,7 +97,7 @@ rundir = os.path.join(case.path['exe'],'run')
 call(['mkdir','-p',rundir])
 call(' '.join(['cp','-v',refcase_root+'/*',rundir]),shell=True)
 
-xmlchange({'PIO_TYPENAME':'netcdf'})
+xmlchange({'PIO_TYPENAME':'pnetcdf'})
 
 xmlchange({'CICE_NAMELIST_OPTS' : 'cam5=.true.'},
           file_name = 'env_run.xml')

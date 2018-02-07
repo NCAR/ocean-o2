@@ -37,8 +37,8 @@ mach = 'cheyenne'
 compref = 'g.e11_LENS'
 compset = 'GECOIAF'
 res = 'T62_g16'
-note = 'memleak-testing'
-ens = 1
+note = 'o2-sensitivity'
+ens = 0
 
 run_refdate = '0281-01-01'
 run_refcase = 'g.e11_LENS.GECOIAF.T62_g16.009'
