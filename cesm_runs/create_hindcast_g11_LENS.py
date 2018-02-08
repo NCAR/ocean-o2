@@ -30,6 +30,7 @@ if not os.path.exists(caserootroot):
 
 os.environ['PROJECT'] = account
 os.environ['WALLTIME'] = walltime
+os.environ['QUEUE'] = queue
 
 #----------------------------------------------------------------------
 #---- source
