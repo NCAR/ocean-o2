@@ -2,8 +2,10 @@
 set -e
 
 #-- set defaults
-conda_env=py2
-job_account=UGIT0016
+# expected environment variables
+conda_env=${DEFAULT_CONDA_ENV}
+job_account=${JOB_ACCOUNT}
+
 walltime=11:59:00
 queue=economy
 workers=4

@@ -1,0 +1,214 @@
+#!/bin/bash
+# steps to start jupyter lab on geyser
+# 1. submit job with slurm and start jupyter lab
+#    jupyter lab --no-browser --ip=$(hostname)
+# 2. log into the host node of that job from cheyenne with something like
+#    ssh -N -L 8888:geyser01:8888 geyser01
+# 3. log into cheyenne login node from local machine with
+#    ssh -N -L 8888:localhost:8888 cheyenne5.ucar.edu
+# 4. open browser: http://localhost:8888
+
+WALLTIME=24:00:00
+PARTITION=dav
+MEMORY=30GB
+CONSTRAINT=geyser
+PORT=8888
+conda_env=${DEFAULT_CONDA_ENV}
+CONDA_PYTHON_PATH=/glade/p/work/mclong/miniconda2/bin
+
+jid=
+usage () {
+cat << EOF
+Usage: start jupyter lab using slurm
+Launch jupyter lab using default slurm PARTITION.
+Possible options are:
+ -a,--account: account
+ -t,--walltime: walltime
+ -m,--memory: amount of memory (e.g. 80G)
+ -c,--constraint: constraint (e.g. geyser, caldera)
+ -p,--port: port for jupyter
+ -j,--jid_id: existing job to which to connect
+ -e,--env: Conda environment
+EOF
+exit
+}
+
+while [[ $# -gt 0 ]]; do
+  key="${1}"
+  case ${key} in
+    -h|--help)
+      usage ;;
+    -a|--account)
+      JOB_ACCOUNT="${2}"
+      ;;
+    -m|--memory)
+      MEMORY="${2}"
+      ;;
+    -t|--walltime)
+      WALLTIME="${2}"
+      ;;
+    -c|--constraint)
+      CONSTRAINT="${2}"
+      ;;
+    -p|--port)
+      PORT="${2}"
+      ;;
+    -j|--job_id)
+      jid="${2}"
+      ;;
+    -e|--env)
+      conda_env="${2}"
+      ;;
+    *)
+      echo "ERROR unknown argument: ${key}"
+      usage
+  esac
+  shift
+  shift
+done
+
+if [[ -z ${jid} ]]; then
+  # If JOB_ACCOUNT is still not set, then use defaults
+  if [ -z "$JOB_ACCOUNT" ]; then
+    source /glade/u/apps/ch/opt/usr/bin/getacct.sh
+    fi
+
+  if [ -z $WALLTIME ]; then
+    echo "ERROR: WALLTIME not set."
+    exit 1
+  fi
+  if [ -z $PARTITION ]; then
+    echo "ERROR: PARTITION not set."
+    exit 1
+  fi
+
+  if [ -z $MEMORY ]; then
+    echo "ERROR: MEMORY not set."
+    exit 1
+  fi
+  if [ -z $CONSTRAINT ]; then
+    echo "ERROR: CONSTRAINT not set."
+    exit 1
+  fi
+  if [ -z $PORT ]; then
+    echo "ERROR: PORT not set."
+    exit 1
+  fi
+  if [ -z "${conda_env}" ]; then
+    echo "ERROR: conda_env not set."
+    exit 1
+  fi
+
+  echo "Starting jupyter lab"
+  echo "Partition = ${PARTITION}"
+  echo "Memory = ${MEMORY}"
+  echo "Constraint = ${CONSTRAINT}"
+  echo "Account = ${JOB_ACCOUNT}"
+  echo "PORT = ${PORT}"
+  echo "CONDA environment = ${conda_env}"
+  echo
+
+  STDOE=${TMPDIR}/jlab.%J.out
+
+  stro=$(sbatch << EOF
+#!/bin/bash
+#SBATCH -J jupyterlab
+#SBATCH -n 1
+#SBATCH --ntasks-per-node=1
+#SBATCH -p ${PARTITION}
+#SBATCH -A ${JOB_ACCOUNT}
+#SBATCH -t ${WALLTIME}
+#SBATCH --mem ${MEMORY}
+#SBATCH -C ${CONSTRAINT}
+#SBATCH -e ${STDOE}
+#SBATCH -o ${STDOE}
+#------------------------------------------------------------------------
+#-- setup shell
+#------------------------------------------------------------------------
+if [ -z \$MODULEPATH_ROOT ]; then
+  unset MODULEPATH_ROOT
+else
+  echo "NO MODULEPATH_ROOT TO RESET"
+fi
+if [ -z \$MODULEPATH ]; then
+  unset MODULEPATH
+else
+  echo "NO MODULEPATH TO RESET"
+fi
+if [ -z \$LMOD_SYSTEM_DEFAULT_MODULES ]; then
+  unset LMOD_SYSTEM_DEFAULT_MODULES
+else
+  echo "NO LMOD_SYSTEM_DEFAULT_MODULES TO RESET"
+fi
+source /etc/profile
+export TERM=xterm-256color
+export HOME=/glade/u/home/\${USER}
+#
+#------------------------------------------------------------------------
+#-- kludge
+#------------------------------------------------------------------------
+# When I try to read netCDF4 files with xarray, I get:
+# ImportError: /lib64/libk5crypto.so.3: symbol krb5int_buf_len, version
+#   krb5support_0_MIT not defined in file libkrb5support.so.0 with link time
+#   reference
+# this fixes it:
+unset LD_LIBRARY_PATH
+#
+#------------------------------------------------------------------------
+#-- User specific (conda requirement)
+#------------------------------------------------------------------------
+export PATH=${CONDA_PYTHON_PATH}:\${PATH}
+source activate ${conda_env}
+#
+#------------------------------------------------------------------------
+#-- start jlab
+#------------------------------------------------------------------------
+jupyter lab --no-browser --ip=\$(hostname) --port=${PORT}
+EOF
+  )
+  jid=$(echo ${stro} | awk '{print $4}')
+fi
+
+echo -n "waiting"
+while [ 1 ]; do
+  #-- get job status
+  control=$(scontrol show job ${jid})
+  for word in ${control}; do
+    varname=$(echo ${word} | awk -F= '{print $1}')
+    value=$(echo ${word} | awk -F= '{print $2}')
+    if [[ ${varname} =~ BatchHost ]]; then
+      BatchHost=${value}
+    fi
+    if [[ ${varname} =~ JobState ]]; then
+      JobState=${value}
+    fi
+  done
+
+  if [[ -n "${BatchHost}" && ${JobState} =~ RUNNING ]]; then
+    echo .
+    echo ${JobState}
+    echo "Job ID: ${jid}"
+    echo "Job host: ${BatchHost}"
+    break
+  else
+    echo -n ..
+  fi
+  sleep 1
+done
+
+echo
+ssh -f -o ExitOnForwardFailure=yes -N -L ${PORT}:${BatchHost}:${PORT} ${BatchHost}
+
+echo
+echo "Execute on local machine:"
+echo "ssh -N -L ${PORT}:localhost:${PORT} $(hostname).ucar.edu"
+
+trap ctrl_c INT
+function ctrl_c() {
+  echo "killing ${jid}"
+  scancel ${jid}
+  exit 0
+}
+echo
+echo "Job log: ${TMPDIR}/jlab.${jid}.out"
+tail -f ${TMPDIR}/jlab.${jid}.out
